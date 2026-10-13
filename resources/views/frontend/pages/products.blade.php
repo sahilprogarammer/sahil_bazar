@@ -4,19 +4,121 @@
 
 @section('content')
 
-{{-- =========================
-         FIXED PAGE HEADER
-    ========================== --}}
+<style>
+    /* =====================================================
+   PRODUCT AVAILABILITY
+===================================================== */
+
+    .product-image {
+        position: relative;
+    }
+
+
+    /* =====================================================
+   UNAVAILABLE PRODUCT
+===================================================== */
+
+    .product-unavailable .product-image img {
+        filter: grayscale(25%);
+        opacity: 0.55;
+    }
+
+
+    /* =====================================================
+   STATUS BADGE
+===================================================== */
+
+    .product-status {
+        position: absolute;
+
+        left: 10px;
+        bottom: 10px;
+
+        padding: 6px 10px;
+
+        border-radius: 8px;
+
+        font-size: 10px;
+        font-weight: 800;
+
+        letter-spacing: 0.3px;
+
+        color: #ffffff;
+
+        z-index: 2;
+    }
+
+
+    /* SOLD OUT */
+
+    .status-2 {
+        background: #555555;
+    }
+
+
+    /* NOT AVAILABLE */
+
+    .status-3 {
+        background: #d9534f;
+    }
+
+
+    /* COMING SOON */
+
+    .status-4 {
+        background: #f47c20;
+    }
+
+
+    /* =====================================================
+   UNAVAILABLE ADD BUTTON
+===================================================== */
+
+    .unavailable-btn {
+        border: 0;
+
+        background: #eeeeee;
+
+        color: #999999;
+
+        min-height: 34px;
+
+        padding: 0 10px;
+
+        border-radius: 9px;
+
+        font-size: 9px;
+
+        font-weight: 800;
+
+        cursor: not-allowed;
+
+        white-space: nowrap;
+    }
+
+
+    /* =====================================================
+   DISABLE HEART
+===================================================== */
+
+    .product-unavailable .heart {
+        opacity: 0.5;
+
+        cursor: not-allowed;
+    }
+</style>
+
+<!-- // FIXED PAGE HEADER -->
 <header class="page-header">
 
-    <a href="{{ route('categories') }}" class="back-btn">
+    <a href="{{ url($category->slug) }}" class="back-btn">
         ←
     </a>
 
     <div class="page-header-title">
 
         <h1>
-            {{ ucfirst($category ?? 'Products') }}
+            {{ $subcategory->name }}
         </h1>
 
         <span>
@@ -28,82 +130,76 @@
     <a href="#" class="header-btn page-cart-btn">
         🛒
 
-        <span class="cart-count">
-            2
-        </span>
+        <span class="cart-count" id="headerCartCount">0</span>
     </a>
 
 </header>
 
 
-{{-- =========================
-         FILTER / SORT BAR
-    ========================== --}}
+<!-- // FILTER / SORT BAR -->
 <!-- <div class="product-filter-wrapper">
 
-    <div class="product-search">
+        <div class="product-search">
 
-        <span>
-            ⌕
-        </span>
+            <span>
+                ⌕
+            </span>
 
-        <input
-            type="search"
-            id="productSearch"
-            placeholder="Search products..."
-            autocomplete="off">
+            <input
+                type="search"
+                id="productSearch"
+                placeholder="Search products..."
+                autocomplete="off">
 
-    </div>
-
-
-    <div class="filter-row">
-
-        <button
-            type="button"
-            class="filter-btn active"
-            data-filter="all">
-
-            All
-
-        </button>
+        </div>
 
 
-        <button
-            type="button"
-            class="filter-btn"
-            data-filter="chicken">
+        <div class="filter-row">
 
-            Chicken
+            <button
+                type="button"
+                class="filter-btn active"
+                data-filter="all">
 
-        </button>
+                All
 
-
-        <button
-            type="button"
-            class="filter-btn"
-            data-filter="combo">
-
-            Combos
-
-        </button>
+            </button>
 
 
-        <button
-            type="button"
-            class="filter-btn">
+            <button
+                type="button"
+                class="filter-btn"
+                data-filter="chicken">
 
-            ⚙ Filter
+                Chicken
 
-        </button>
-
-    </div>
-
-</div> -->
+            </button>
 
 
-{{-- =========================
-         PRODUCT PAGE
-    ========================== --}}
+            <button
+                type="button"
+                class="filter-btn"
+                data-filter="combo">
+
+                Combos
+
+            </button>
+
+
+            <button
+                type="button"
+                class="filter-btn">
+
+                ⚙ Filter
+
+            </button>
+
+        </div>
+
+    </div> -->
+
+
+<!-- // PRODUCT PAGE -->
 <main class="product-page">
 
 
@@ -119,7 +215,7 @@
             </span>
 
             <h2>
-                {{ ucfirst($category ?? 'Chicken') }}
+                {{ $subcategory->name }}
             </h2>
 
         </div>
@@ -136,32 +232,79 @@
 
     </div>
 
+    <!-- PRODUCTS -->
 
-    {{-- =========================
-             PRODUCTS
-        ========================== --}}
     <section class="products product-list">
 
+        @foreach($products as $product)
 
-        {{-- PRODUCT 1 --}}
+        @php
+            $status = $product->availability_status ?? 1;
+
+            $statusText = match ($status) {
+                2 => 'SOLD OUT',
+                3 => 'NOT AVAILABLE',
+                4 => 'COMING SOON',
+                default => 'AVAILABLE',
+            };
+
+            $isAvailable = $status === 1;
+        @endphp
+
+
         <article
-            class="product-card"
-            data-name="fresh chicken curry cut"
-            data-category="chicken">
+            class="product-card {{ !$isAvailable ? 'product-unavailable' : '' }}"
+
+            data-product-id="{{ $product->id }}"
+            data-name="{{ $product->name }}"
+            data-category="{{ $product->subcategory_id }}"
+            data-unit="{{ $product->unit }}"
+            data-price="{{ $product->price }}"
+            data-discount-price="{{ $product->discount_price }}"
+            data-min-qty="{{ $product->minimum_order_qty }}"
+            data-image="{{ !empty($product->images) ? asset($product->images[0]) : '' }}"
+            data-status="{{ $status }}">
+
 
             <div class="product-image">
 
-                <img
-                    src="https://images.unsplash.com/photo-1604503468506-a8da13d82791?auto=format&fit=crop&w=700&q=85"
-                    alt="Fresh Chicken Curry Cut">
+                @if(!empty($product->images) && count($product->images) > 0)
 
-                <span class="discount">
-                    12% OFF
+                <img
+                    src="{{ asset($product->images[0]) }}"
+                    alt="{{ $product->name }}">
+
+                @endif
+
+
+                {{-- STATUS --}}
+                @if(!$isAvailable)
+
+                <span class="product-status status-{{ $status }}">
+                    {{ $statusText }}
                 </span>
 
+                @elseif($product->price > $product->discount_price)
+
+                @php
+                $discount = round(
+                (($product->price - $product->discount_price)
+                / $product->price) * 100
+                );
+                @endphp
+
+                <span class="discount">
+                    {{ $discount }}% OFF
+                </span>
+
+                @endif
+
+
+                {{-- HEART --}}
                 <button
                     type="button"
-                    class="heart">
+                    class="heart"
+                    {{ !$isAvailable ? 'disabled' : '' }}>
 
                     ♡
 
@@ -173,18 +316,25 @@
             <div class="product-info">
 
                 <h3 class="product-name">
-                    Fresh Chicken Curry Cut
+                    {{ $product->name }}
                 </h3>
 
+
                 <p class="product-weight">
-                    500 g • Cleaned
+                    Minimum
+                    {{ $product->minimum_order_qty }}
+                    {{ $product->unit }}
                 </p>
 
+
                 <div class="product-rating">
+
                     ★ 4.8
+
                     <span>
                         (124)
                     </span>
+
                 </div>
 
 
@@ -193,28 +343,46 @@
                     <div class="product-price">
 
                         <span class="price">
-                            ₹149
+                            ₹{{ number_format($product->discount_price, 0) }}
                         </span>
 
+
+                        @if($product->price > $product->discount_price)
+
                         <span class="old-price">
-                            ₹169
+                            ₹{{ number_format($product->price, 0) }}
                         </span>
+
+                        @endif
 
                     </div>
 
-                    <div class="quantity-control">
 
-                        <button type="button" class="quantity-btn minus">
-                            −
-                        </button>
+                    <div class="product-action">
 
-                        <span class="quantity">
-                            0
-                        </span>
+                        @if($isAvailable)
 
-                        <button type="button" class="quantity-btn plus">
+                        <button
+                            type="button"
+                            class="add-btn"
+                            onclick="openQuantityModal(this)">
+
                             +
+
                         </button>
+
+                        @else
+
+                        <button
+                            type="button"
+                            class="unavailable-btn"
+                            disabled>
+
+                            {{ $statusText }}
+
+                        </button>
+
+                        @endif
 
                     </div>
 
@@ -224,427 +392,16 @@
 
         </article>
 
-
-        {{-- PRODUCT 2 --}}
-        <article
-            class="product-card"
-            data-name="chicken breast boneless"
-            data-category="chicken">
-
-            <div class="product-image">
-
-                <img
-                    src="https://images.unsplash.com/photo-1603360946369-dc9bb6258143?auto=format&fit=crop&w=700&q=85"
-                    alt="Chicken Breast">
-
-                <span class="discount">
-                    15% OFF
-                </span>
-
-                <button
-                    type="button"
-                    class="heart">
-
-                    ♡
-
-                </button>
-
-            </div>
-
-
-            <div class="product-info">
-
-                <h3 class="product-name">
-                    Chicken Breast Boneless
-                </h3>
-
-                <p class="product-weight">
-                    500 g • Boneless
-                </p>
-
-                <div class="product-rating">
-                    ★ 4.9
-                    <span>
-                        (98)
-                    </span>
-                </div>
-
-
-                <div class="product-bottom">
-
-                    <div class="product-price">
-
-                        <span class="price">
-                            ₹229
-                        </span>
-
-                        <span class="old-price">
-                            ₹269
-                        </span>
-
-                    </div>
-
-                    <div class="quantity-control">
-
-                        <button type="button" class="quantity-btn minus">
-                            −
-                        </button>
-
-                        <span class="quantity">
-                            0
-                        </span>
-
-                        <button type="button" class="quantity-btn plus">
-                            +
-                        </button>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-        </article>
-
-
-        {{-- PRODUCT 3 --}}
-        <article
-            class="product-card"
-            data-name="chicken leg pieces"
-            data-category="chicken">
-
-            <div class="product-image">
-
-                <img
-                    src="https://images.unsplash.com/photo-1527477396000-e27163b481c2?auto=format&fit=crop&w=700&q=85"
-                    alt="Chicken Leg">
-
-                <span class="discount">
-                    10% OFF
-                </span>
-
-                <button
-                    type="button"
-                    class="heart">
-
-                    ♡
-
-                </button>
-
-            </div>
-
-
-            <div class="product-info">
-
-                <h3 class="product-name">
-                    Chicken Leg Pieces
-                </h3>
-
-                <p class="product-weight">
-                    500 g • Fresh Cut
-                </p>
-
-                <div class="product-rating">
-                    ★ 4.7
-                    <span>
-                        (76)
-                    </span>
-                </div>
-
-
-                <div class="product-bottom">
-
-                    <div class="product-price">
-
-                        <span class="price">
-                            ₹179
-                        </span>
-
-                        <span class="old-price">
-                            ₹199
-                        </span>
-
-                    </div>
-
-                    <div class="quantity-control">
-
-                        <button type="button" class="quantity-btn minus">
-                            −
-                        </button>
-
-                        <span class="quantity">
-                            0
-                        </span>
-
-                        <button type="button" class="quantity-btn plus">
-                            +
-                        </button>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-        </article>
-
-
-        {{-- PRODUCT 4 --}}
-        <article
-            class="product-card"
-            data-name="chicken wings"
-            data-category="chicken">
-
-            <div class="product-image">
-
-                <img
-                    src="https://images.unsplash.com/photo-1567620832903-9fc6debc209f?auto=format&fit=crop&w=700&q=85"
-                    alt="Chicken Wings">
-
-                <span class="discount">
-                    8% OFF
-                </span>
-
-                <button
-                    type="button"
-                    class="heart">
-
-                    ♡
-
-                </button>
-
-            </div>
-
-
-            <div class="product-info">
-
-                <h3 class="product-name">
-                    Chicken Wings
-                </h3>
-
-                <p class="product-weight">
-                    500 g • Fresh
-                </p>
-
-                <div class="product-rating">
-                    ★ 4.6
-                    <span>
-                        (54)
-                    </span>
-                </div>
-
-
-                <div class="product-bottom">
-
-                    <div class="product-price">
-
-                        <span class="price">
-                            ₹159
-                        </span>
-
-                        <span class="old-price">
-                            ₹179
-                        </span>
-
-                    </div>
-
-                    <div class="quantity-control">
-
-                        <button type="button" class="quantity-btn minus">
-                            −
-                        </button>
-
-                        <span class="quantity">
-                            0
-                        </span>
-
-                        <button type="button" class="quantity-btn plus">
-                            +
-                        </button>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-        </article>
-
-
-        {{-- PRODUCT 5 --}}
-        <article
-            class="product-card"
-            data-name="chicken keema"
-            data-category="chicken">
-
-            <div class="product-image">
-
-                <img
-                    src="https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=700&q=85"
-                    alt="Chicken Keema">
-
-                <span class="discount">
-                    12% OFF
-                </span>
-
-                <button
-                    type="button"
-                    class="heart">
-
-                    ♡
-
-                </button>
-
-            </div>
-
-
-            <div class="product-info">
-
-                <h3 class="product-name">
-                    Chicken Keema
-                </h3>
-
-                <p class="product-weight">
-                    500 g • Minced
-                </p>
-
-                <div class="product-rating">
-                    ★ 4.8
-                    <span>
-                        (61)
-                    </span>
-                </div>
-
-
-                <div class="product-bottom">
-
-                    <div class="product-price">
-
-                        <span class="price">
-                            ₹199
-                        </span>
-
-                        <span class="old-price">
-                            ₹229
-                        </span>
-
-                    </div>
-
-                    <div class="quantity-control">
-
-                        <button type="button" class="quantity-btn minus">
-                            −
-                        </button>
-
-                        <span class="quantity">
-                            0
-                        </span>
-
-                        <button type="button" class="quantity-btn plus">
-                            +
-                        </button>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-        </article>
-
-
-        {{-- PRODUCT 6 --}}
-        <article
-            class="product-card"
-            data-name="chicken tikka cut"
-            data-category="combo">
-
-            <div class="product-image">
-
-                <img
-                    src="https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?auto=format&fit=crop&w=700&q=85"
-                    alt="Chicken Tikka">
-
-                <span class="discount">
-                    18% OFF
-                </span>
-
-                <button
-                    type="button"
-                    class="heart">
-
-                    ♡
-
-                </button>
-
-            </div>
-
-
-            <div class="product-info">
-
-                <h3 class="product-name">
-                    Chicken Tikka Cut
-                </h3>
-
-                <p class="product-weight">
-                    500 g • Ready to Cook
-                </p>
-
-                <div class="product-rating">
-                    ★ 4.9
-                    <span>
-                        (89)
-                    </span>
-                </div>
-
-
-                <div class="product-bottom">
-
-                    <div class="product-price">
-
-                        <span class="price">
-                            ₹249
-                        </span>
-
-                        <span class="old-price">
-                            ₹299
-                        </span>
-
-                    </div>
-
-                    <div class="quantity-control">
-
-                        <button type="button" class="quantity-btn minus">
-                            −
-                        </button>
-
-                        <span class="quantity">
-                            0
-                        </span>
-
-                        <button type="button" class="quantity-btn plus">
-                            +
-                        </button>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-        </article>
-
+        @endforeach
 
     </section>
 
 
-    {{-- =========================
-             NO RESULT
-        ========================== --}}
+    <!-- NO RESULT -->
     <div
         id="noProducts"
         class="no-products"
-        style="display:none;">
+        style="{{ $products->count() > 0 ? 'display:none;' : 'display:block;' }}">
 
         <div class="no-products-icon">
             🔍
@@ -659,218 +416,11 @@
         </p>
 
     </div>
-
-
 </main>
+
 
 
 {{-- Bottom Navigation --}}
 @include('frontend.components.bottom-nav')
 
 @endsection
-
-
-@push('scripts')
-
-<script>
-    /* =========================================================
-   PRODUCT QUANTITY
-========================================================= */
-
-    document
-        .querySelectorAll('.product-card')
-        .forEach(function(card) {
-
-            const quantityControl =
-                card.querySelector('.quantity-control');
-
-            const quantity =
-                card.querySelector('.quantity');
-
-            const plusBtn =
-                card.querySelector('.plus');
-
-            const minusBtn =
-                card.querySelector('.minus');
-
-
-            let count = 0;
-
-
-            /* PLUS */
-
-            plusBtn.addEventListener('click', function() {
-
-                count++;
-
-                quantity.textContent = count;
-
-                quantityControl.classList.add('show');
-
-            });
-
-
-            /* MINUS */
-
-            minusBtn.addEventListener('click', function() {
-
-                if (count > 0) {
-
-                    count--;
-
-                    quantity.textContent = count;
-
-                }
-
-
-                if (count === 0) {
-
-                    quantityControl.classList.remove('show');
-
-                }
-
-            });
-
-        });
-
-    document.addEventListener('DOMContentLoaded', function() {
-
-        const searchInput =
-            document.getElementById('productSearch');
-
-        const products =
-            document.querySelectorAll('.product-card');
-
-        const filterButtons =
-            document.querySelectorAll('.filter-btn');
-
-        const noProducts =
-            document.getElementById('noProducts');
-
-
-        let activeFilter = 'all';
-
-
-        function filterProducts() {
-
-            const search =
-                searchInput.value
-                .toLowerCase()
-                .trim();
-
-            let visibleCount = 0;
-
-
-            products.forEach(function(product) {
-
-                const name =
-                    product.dataset.name
-                    .toLowerCase();
-
-                const category =
-                    product.dataset.category
-                    .toLowerCase();
-
-
-                const matchesSearch =
-                    name.includes(search);
-
-
-                const matchesFilter =
-                    activeFilter === 'all' ||
-                    category === activeFilter;
-
-
-                if (
-                    matchesSearch &&
-                    matchesFilter
-                ) {
-
-                    product.style.display = '';
-
-                    visibleCount++;
-
-                } else {
-
-                    product.style.display = 'none';
-
-                }
-
-            });
-
-
-            noProducts.style.display =
-                visibleCount === 0 ?
-                'block' :
-                'none';
-
-        }
-
-
-        /* Search */
-
-        searchInput.addEventListener(
-            'input',
-            filterProducts
-        );
-
-
-        /* Filter */
-
-        filterButtons.forEach(function(button) {
-
-            button.addEventListener(
-                'click',
-                function() {
-
-                    filterButtons.forEach(function(btn) {
-
-                        btn.classList.remove('active');
-
-                    });
-
-
-                    this.classList.add('active');
-
-
-                    activeFilter =
-                        this.dataset.filter || 'all';
-
-
-                    filterProducts();
-
-                }
-            );
-
-        });
-
-
-        /* Heart */
-
-        document
-            .querySelectorAll('.heart')
-            .forEach(function(button) {
-
-                button.addEventListener(
-                    'click',
-                    function(event) {
-
-                        event.preventDefault();
-
-                        this.classList.toggle('liked');
-
-                        this.textContent =
-                            this.classList.contains('liked') ?
-                            '♥' :
-                            '♡';
-
-                    }
-                );
-
-            });
-
-
-    });
-</script>
-
-@endpush
