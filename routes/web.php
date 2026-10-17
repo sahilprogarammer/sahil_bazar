@@ -23,12 +23,11 @@ Route::get('/clear-cache', function () {
     Artisan::call('route:clear');
     Artisan::call('view:clear');
     Artisan::call('clear-compiled');
-    
+
     return response()->json([
         'success' => true,
         'message' => 'Laravel cache cleared successfully.'
     ]);
-
 });
 
 
@@ -91,6 +90,16 @@ Route::prefix('admin')->group(function () {
         Route::post('/product/{id}/save', [ProductController::class, 'store'])->name('product.store');
         Route::post('/product/{id}/toggle-status', [ProductController::class, 'toggleStatus'])->name('product.toggleStatus');
         Route::delete('/product/{id}/delete', [ProductController::class, 'delete'])->name('product.delete');
+
+
+        //Product availability
+        Route::get('/all-unavailability', [ProductController::class, 'allUnavailability'])->name('allunAvailability');
+        Route::get('/product-availability/subcategories', [ProductController::class, 'subcategories'])->name('admin.product-availability.subcategories');
+
+        Route::get('/product-availability/products/{subcategory}', [ProductController::class, 'products'])->name('admin.product-availability.products');
+        Route::post('/product-availability',[ProductController::class, 'availabilityStore'])->name('admin.product-availability.store');
+        Route::delete('/product-availability', [ProductController::class, 'availabilityDestroy'])
+    ->name('admin.product-availability.destroy');
 
 
         //Delivery boy manage
@@ -158,6 +167,10 @@ Route::get('/profile', [HomeController::class, 'profile'])->name('profile');
 Route::post('/profile-update', [HomeController::class, 'updateProfile'])->name('profile.update');
 
 Route::get('/my-orders', [HomeController::class, 'myOrders'])->name('my-orders');
+
+//order cancel
+Route::post('/orders/{id}/cancel', [HomeController::class, 'orderCancel'])->name('orders.cancel');
+
 
 Route::post('/payment/razorpay/create', [HomeController::class, 'payment'])
     ->name('payment.razorpay.create');

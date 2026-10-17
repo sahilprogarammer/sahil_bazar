@@ -1,6 +1,6 @@
 @extends('frontend.layouts.app')
 
-@section('title', 'Order Placed Successfully - Nonveg Bazar')
+@section('title', 'Order Placed Successfully - Nonveg Mart')
 
 @section('content')
 
@@ -217,7 +217,7 @@
             </a>
 
             <span class="continue-text">
-                Thank you for choosing Nonveg Bazar ❤️
+                Thank you for choosing Nonveg Mart ❤️
             </span>
 
         </div>

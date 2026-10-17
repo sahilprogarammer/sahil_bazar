@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\Subcategory;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ProductController extends Controller
 {
@@ -409,5 +410,191 @@ class ProductController extends Controller
                 ->route('admin.deliverycharges')
                 ->with('success', 'Delivery charges added successfully.');
         }
+    }
+
+
+    public function allUnavailability(Request $request)
+    {
+        $data = DB::table('product_availabilities')
+            ->leftJoin(
+                'subcategories',
+                'product_availabilities.subcategory_id',
+                '=',
+                'subcategories.id'
+            )
+            ->leftJoin(
+                'products',
+                'product_availabilities.product_id',
+                '=',
+                'products.id'
+            )
+            ->select(
+                'product_availabilities.subcategory_id',
+                'product_availabilities.product_id',
+                'subcategories.name as subcategory_name',
+                'product_availabilities.date',
+                'product_availabilities.availability_status',
+                'products.name as product_name'
+            )
+            ->orderByDesc('product_availabilities.date')
+            ->get()
+
+            // Group by subcategory, date, and status.
+            ->groupBy(function ($item) {
+                return $item->subcategory_id . '_' .
+                    $item->date . '_' .
+                    $item->availability_status;
+            })
+
+            // Prepare grouped data for the Blade view.
+            ->map(function ($items) {
+                $first = $items->first();
+
+                return (object) [
+                    'subcategory_id' => $first->subcategory_id,
+
+                    'subcategory_name' => $first->subcategory_name,
+
+                    'date' => $first->date,
+
+                    'availability_status' => $first->availability_status,
+
+                    // Actual product IDs for Edit modal selection.
+                    'product_ids' => $items
+                        ->pluck('product_id')
+                        ->filter()
+                        ->unique()
+                        ->values()
+                        ->all(),
+
+                    // Product names for displaying in the table.
+                    'products' => $items
+                        ->pluck('product_name')
+                        ->filter()
+                        ->unique()
+                        ->values(),
+                ];
+            })
+            ->values();
+
+        return view(
+            'admin.pages.unavailable.all-unavailable',
+            compact('data')
+        );
+    }
+
+    public function subcategories()
+    {
+        $subcategories = Subcategory::query()
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        return response()->json([
+            'subcategories' => $subcategories,
+        ]);
+    }
+
+    public function products(Subcategory $subcategory)
+    {
+        $products = Product::query()
+            ->where('subcategory_id', $subcategory->id)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        return response()->json([
+            'products' => $products,
+        ]);
+    }
+
+    public function availabilityStore(Request $request)
+    {
+        $validated = $request->validate([
+            'subcategory_id'      => ['required', 'integer', 'exists:subcategories,id'],
+            'product_ids'         => ['required', 'array', 'min:1'],
+            'product_ids.*'       => ['required', 'integer', 'distinct', 'exists:products,id'],
+            'date'                => ['required', 'date_format:Y-m-d'],
+            'availability_status' => ['required', 'in:available,out_of_stock'],
+
+            // edit-only fields
+            'is_edit'             => ['nullable', 'in:0,1'],
+            'old_subcategory_id'  => ['required_if:is_edit,1', 'nullable', 'integer'],
+            'old_date'            => ['required_if:is_edit,1', 'nullable', 'date_format:Y-m-d'],
+            'old_product_ids'     => ['required_if:is_edit,1', 'nullable', 'string'],
+        ]);
+
+        $isEdit = ($validated['is_edit'] ?? '0') === '1';
+        $now    = now();
+
+        DB::transaction(function () use ($validated, $isEdit, $now) {
+
+            // ---------- EDIT: remove the old records first ----------
+            if ($isEdit) {
+                $oldProductIds = json_decode($validated['old_product_ids'], true);
+
+                if (!is_array($oldProductIds)) {
+                    $oldProductIds = [];
+                }
+
+                DB::table('product_availabilities')
+                    ->where('subcategory_id', $validated['old_subcategory_id'])
+                    ->where('date', $validated['old_date'])
+                    ->whereIn('product_id', $oldProductIds)
+                    ->delete();
+            }
+
+            // ---------- Avoid duplicates: one status per product per date ----------
+            DB::table('product_availabilities')
+                ->where('date', $validated['date'])
+                ->whereIn('product_id', $validated['product_ids'])
+                ->delete();
+
+            // ---------- Insert the new rows ----------
+            $rows = collect($validated['product_ids'])
+                ->map(function ($productId) use ($validated, $now) {
+                    return [
+                        'subcategory_id'      => $validated['subcategory_id'],
+                        'product_id'          => $productId,
+                        'date'                => $validated['date'],
+                        'availability_status' => $validated['availability_status'],
+                        'created_at'          => $now,
+                        'updated_at'          => $now,
+                    ];
+                })
+                ->all();
+
+            DB::table('product_availabilities')->insert($rows);
+        });
+
+        return redirect()
+            ->back()
+            ->with('success', $isEdit
+                ? 'Product availability updated successfully.'
+                : 'Product availability saved successfully.');
+    }
+
+    public function availabilityDestroy(Request $request)
+    {
+        $validated = $request->validate([
+            'subcategory_id' => ['required', 'integer'],
+            'product_ids'    => ['required', 'array', 'min:1'],
+            'product_ids.*'  => ['required', 'integer'],
+            'date'           => ['required', 'date_format:Y-m-d'],
+        ]);
+
+        $deleted = DB::table('product_availabilities')
+            ->where('subcategory_id', $validated['subcategory_id'])
+            ->where('date', $validated['date'])
+            ->whereIn('product_id', $validated['product_ids'])
+            ->delete();
+
+        if ($deleted === 0) {
+            return redirect()
+                ->back()
+                ->with('error', 'No availability records were found to delete.');
+        }
+
+        return redirect()
+            ->back()
+            ->with('success', 'Product availability deleted successfully.');
     }
 }

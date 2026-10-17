@@ -14,6 +14,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class HomeController extends Controller
@@ -102,19 +103,11 @@ class HomeController extends Controller
     }
 
 
-    // public function orderSubmit(Request $request)
-    // {
-    //     dd([
-    //     'METHOD' => $request->method(),
-    //     'DATA' => $request->all(),
-    //     'USER' => Auth::id(),
-    //     'CART' => session()->get('cart', []),
-    // ]);
-    // }
 
     public function orderSubmit(Request $request)
     {
         $user = Auth::user();
+
         if (!$user) {
             return response()->json([
                 'success' => false,
@@ -122,160 +115,160 @@ class HomeController extends Controller
             ], 401);
         }
 
-
         $request->validate([
             'address_id' => 'required|integer|exists:addresses,id',
-
             'cart' => 'required|string',
         ]);
 
         $cart = json_decode($request->cart, true);
 
-
         if (!is_array($cart) || empty($cart)) {
-
             return response()->json([
                 'success' => false,
                 'message' => 'Your cart is empty.',
             ], 422);
         }
 
-
         $address = Address::where('id', $request->address_id)
             ->where('user_id', $user->id)
             ->first();
 
         if (!$address) {
-
             return response()->json([
                 'success' => false,
                 'message' => 'Invalid delivery address.',
             ], 422);
         }
 
+        /*
+    |--------------------------------------------------------------------------
+    | Calculate Subtotal
+    |--------------------------------------------------------------------------
+    */
 
         $subtotal = 0;
 
         foreach ($cart as $item) {
-
             $subtotal += (float) ($item['total_price'] ?? 0);
         }
 
         $subtotal = round($subtotal, 2);
 
+
         $discount = 0;
-
         $deliveryCharge = 0;
-
         $tax = 0;
 
-        $totalAmount =
-            $subtotal
-            - $discount
-            + $deliveryCharge
-            + $tax;
+        $deliveryDistance = 0;
 
-        $totalAmount = round($totalAmount, 2);
+        $deliveryRules = \App\Models\DeliveryCharge::where('is_active', 1)
+            ->orderBy('min_distance')
+            ->get();
+
+        foreach ($deliveryRules as $rule) {
+
+            $minDistance = (float) $rule->min_distance;
+            $maxDistance = (float) $rule->max_distance;
+            $minAmount = (float) $rule->min_order_amount;
+            $maxAmount = (float) $rule->max_order_amount;
+
+            $distanceMatches =
+                $deliveryDistance >= $minDistance &&
+                $deliveryDistance <= $maxDistance;
+
+            $amountMatches =
+                $subtotal >= $minAmount &&
+                ($maxAmount <= 0 || $subtotal <= $maxAmount);
+
+            if ($distanceMatches && $amountMatches) {
+                $deliveryCharge = (float) $rule->charge;
+                break;
+            }
+        }
+
+        $totalAmount = round(
+            $subtotal - $discount + $deliveryCharge + $tax,
+            2
+        );
 
 
         DB::beginTransaction();
 
         try {
 
-
-            $orderNumber =
-                'NB'
-                . strtoupper(Str::random(4));
-
+            $orderNumber = 'NB' . strtoupper(Str::random(4));
 
             $order = Order::create([
-
                 'user_id' => $user->id,
-
                 'order_number' => $orderNumber,
-
                 'address_id' => $address->id,
 
                 'subtotal' => $subtotal,
-
                 'discount' => $discount,
-
                 'delivery_charge' => $deliveryCharge,
-
                 'tax' => $tax,
-
                 'total_amount' => $totalAmount,
 
                 'payment_method' => $request->payment_method,
-
                 'payment_status' => 0,
-
                 'order_status' => 'pending',
-
                 'notes' => $request->notes ?? null,
-
                 'placed_at' => now(),
             ]);
-
 
             foreach ($cart as $item) {
 
                 OrderItem::create([
-
                     'order_id' => $order->id,
-
                     'product_id' => $item['product_id'] ?? null,
-
                     'product_name' => $item['name'] ?? '',
-
                     'quantity' => $item['quantity'] ?? 0,
-
                     'unit' => $item['unit'] ?? null,
-
                     'price' => $item['price'] ?? 0,
-
                     'discount_price' => $item['discount_price'] ?? 0,
-
                     'selling_price' => $item['selling_price'] ?? 0,
-
                     'total_price' => $item['total_price'] ?? 0,
                 ]);
             }
 
-
             DB::commit();
 
-            session()->put('checkout_order_id', $order->id);
-
             return response()->json([
-
                 'success' => true,
-
                 'message' => 'Order placed successfully.',
 
                 'order_id' => $order->id,
-
                 'order_number' => $order->order_number,
 
-                'total_amount' => $order->total_amount,
+                'subtotal' => $subtotal,
+                'delivery_charge' => $deliveryCharge,
+                'discount' => $discount,
+                'tax' => $tax,
+                'total_amount' => $totalAmount,
 
-                'redirect' => route('check-out'),
+                'redirect' => route('check-out', [
+                    'subtotal' => $subtotal,
+                    'deliveryCharge' => $deliveryCharge,
+                    'totalAmount' => $totalAmount,
+                    'addressId' => $address->id,
+                ]),
             ]);
         } catch (\Throwable $e) {
 
             DB::rollBack();
 
-            return response()->json([
-
-                'success' => false,
-
-                'message' => 'Unable to place order.',
-
+            Log::error('Order placement failed', [
+                'user_id' => $user->id,
                 'error' => $e->getMessage(),
+            ]);
 
+            return response()->json([
+                'success' => false,
+                'message' => 'Unable to place order. Please try again.',
             ], 500);
         }
     }
+
 
     public function profile()
     {
@@ -466,6 +459,30 @@ class HomeController extends Controller
         // return $orders;
 
         return view('frontend.pages.myorder', compact('orders'));
+    }
+
+    public function orderCancel($id)
+    {
+        $userId = Auth::user()->id;
+        $order = Order::where('order_number', $id)
+            ->where('user_id', $userId)
+            ->firstOrFail();
+
+        if ($order->order_status !== 'pending') {
+            return back()->with(
+                'error',
+                'This order cannot be cancelled.'
+            );
+        }
+
+        $order->order_status = 'cancelled';
+        $order->payment_status = 3; // Mark payment status as cancelled
+        $order->save();
+
+        return back()->with(
+            'success',
+            'Your order has been cancelled successfully.'
+        );
     }
 
 

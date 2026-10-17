@@ -106,7 +106,7 @@ class ReportController extends Controller
             'address'
         ])->where(
             'order_status',
-            'canceled'
+            'cancelled'
         );
 
 

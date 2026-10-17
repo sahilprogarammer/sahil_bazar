@@ -355,6 +355,48 @@
 
                 </a>
 
+                <!-- product management -->
+                 <div class="nav-dropdown">
+
+                    <button type="button"
+                        class="nav-item nav-dropdown-toggle
+                        {{ request()->routeIs(
+                            'allunAvailability*'
+                        ) ? 'active' : '' }}"
+                        onclick="toggleNavDropdown(this)">
+
+                        <span class="nav-icon">
+                            🗂
+                        </span>
+
+                        <span class="nav-label">
+                            Product Management
+                        </span>
+
+                        <span class="dropdown-arrow">
+
+                            <i class="fa-solid fa-chevron-down"></i>
+
+                        </span>
+
+                    </button>
+
+
+                    <div class="nav-dropdown-menu">
+
+
+                        <a href="{{ route('allunAvailability') }}"
+                            class="nav-sub-item
+                            {{ request()->routeIs('allunAvailabilitys*') ? 'active' : '' }}">
+
+                            <span class="sub-dot"></span>
+
+                            Close Products
+
+                        </a>
+
+                </div>
+
 
                 <!-- =================================================
                      MANAGEMENT

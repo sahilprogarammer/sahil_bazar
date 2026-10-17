@@ -313,7 +313,7 @@
         </div>
 
 
-        <div class="checkout-bill-row checkout-savings">
+        <!-- <div class="checkout-bill-row checkout-savings">
 
             <span>
                 Savings
@@ -323,7 +323,7 @@
                 - ₹0
             </strong>
 
-        </div>
+        </div> -->
 
 
         <div class="checkout-bill-divider"></div>
@@ -369,7 +369,7 @@
 
         {{-- UPI --}}
 
-        <label
+        <!-- <label
             class="checkout-payment-option"
             id="upiPaymentOption">
 
@@ -393,9 +393,9 @@
                 type="radio"
                 name="payment_method"
                 value="upi"
-                checked>
+                >
 
-        </label>
+        </label> -->
 
 
         {{-- CASH ON DELIVERY --}}
@@ -423,7 +423,7 @@
             <input
                 type="radio"
                 name="payment_method"
-                value="cod">
+                value="cod" checked>
 
         </label>
 
@@ -533,18 +533,36 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
     /* =====================================================
-       IMPORTANT
-       EXISTING ORDER ID FROM SESSION
+       CHECKOUT DATA
+       Order ID remains in session; amounts come from URL.
     ===================================================== */
 
     const checkoutOrderId =
         @json(session('checkout_order_id'));
 
+    const checkoutParams = new URLSearchParams(window.location.search);
 
-    console.log(
-        'Checkout Order ID:',
-        checkoutOrderId
-    );
+    function readQueryAmount(key) {
+        const value = checkoutParams.get(key);
+
+        if (value === null || value.trim() === '') {
+            return null;
+        }
+
+        const amount = Number(value);
+        return Number.isFinite(amount) && amount >= 0 ? amount : null;
+    }
+
+    const checkoutSubtotal = readQueryAmount('subtotal');
+    const checkoutDeliveryCharge = readQueryAmount('deliveryCharge');
+    const checkoutTotalAmount = readQueryAmount('totalAmount');
+
+    // Retain the selected address ID if your payment endpoint expects it.
+    const selectedAddressId =
+        checkoutParams.get('addressId') ||
+        localStorage.getItem('selectedAddressId') || '';
+
+    console.log('Checkout Order ID:', checkoutOrderId);
 
 
     /* =====================================================
@@ -615,6 +633,22 @@ document.addEventListener('DOMContentLoaded', function () {
 
         return div.innerHTML;
 
+    }
+
+    function normalizeProductImageUrl(image) {
+        if (!image) {
+            return '';
+        }
+
+        image = String(image).trim();
+
+        // Fix live product image URLs
+        image = image.replace(
+            /^https:\/\/nonvegmart\.in\/products\//i,
+            'https://nonvegmart.in/public/products/'
+        );
+
+        return image;
     }
 
 
@@ -724,49 +758,43 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
         /* ================================================
-           DELIVERY FEE
+           TRUST THE ORDER AMOUNTS PASSED BY LARAVEL
+           These URL values are for display only. Payment
+           processing must use the saved order in database.
         ================================================= */
 
-        const deliveryFee =
-            itemCount > 0
-                ? 30
-                : 0;
+        const displayItemTotal = checkoutSubtotal !== null
+            ? checkoutSubtotal
+            : itemTotal;
+
+        const deliveryFee = checkoutDeliveryCharge !== null
+            ? checkoutDeliveryCharge
+            : 0;
 
 
         /* ================================================
            SAVINGS
         ================================================= */
 
-        const savings =
-            Math.max(
-                originalTotal - itemTotal,
-                0
-            );
+        const savings = Math.max(originalTotal - itemTotal, 0);
 
 
         /* ================================================
            GRAND TOTAL
         ================================================= */
 
-        const grandTotal =
-            itemTotal +
-            deliveryFee;
+        const grandTotal = checkoutTotalAmount !== null
+            ? checkoutTotalAmount
+            : displayItemTotal + deliveryFee;
 
 
         return {
-
-            itemTotal: itemTotal,
-
+            itemTotal: displayItemTotal,
             originalTotal: originalTotal,
-
             deliveryFee: deliveryFee,
-
             savings: savings,
-
             grandTotal: grandTotal,
-
             itemCount: itemCount
-
         };
 
     }
@@ -872,7 +900,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
 
-            if (paymentMessage) {
+            /*if (paymentMessage) {
 
                 paymentMessage.innerHTML = `
 
@@ -882,7 +910,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 `;
 
-            }
+            }*/
 
         }
 
@@ -1151,8 +1179,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 calculateOriginalPrice(item);
 
 
-            const image =
-                item.image || '';
+            const image = normalizeProductImageUrl(item.image);
 
 
             const saving =
@@ -1390,10 +1417,7 @@ document.addEventListener('DOMContentLoaded', function () {
                    ADDRESS
                 ========================================== */
 
-                // const selectedAddressId =
-                //     localStorage.getItem(
-                //         'selectedAddressId'
-                //     );
+                // selectedAddressId is read once near the top of this script.
 
 
                 // if (!selectedAddressId) {
