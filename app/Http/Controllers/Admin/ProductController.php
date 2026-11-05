@@ -242,6 +242,8 @@ class ProductController extends Controller
             'unit' => $validated['unit'],
             'minimum_order_qty' => $validated['minimum_order_qty'],
             'price' => $validated['price'],
+            'available_from' => $request->available_from,
+            'available_until' => $request->available_until,
             'discount_price' => $validated['discount_price'] ?? null,
         ]);
 

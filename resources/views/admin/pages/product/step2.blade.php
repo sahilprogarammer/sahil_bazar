@@ -436,6 +436,84 @@
 
                     </div>
 
+                    <div class="col-md-6 mb-4">
+
+                        <label class="form-label">
+
+                            Available From
+                            <span>*</span>
+
+                        </label>
+
+
+                        <div class="input-group">
+
+                            <input
+                                type="time"
+                                name="available_from"
+                                id="available_from"
+                                class="form-control"
+                                value="{{ old(
+                                    'available_from',
+                                    $product->available_from ?? 0.5
+                                ) }}"
+                                min="0.01"
+                                step="0.01"
+                                placeholder="Example: 0.5"
+                                required>
+
+                        </div>
+
+
+                        @error('available_from')
+
+                            <small class="text-danger">
+                                {{ $message }}
+                            </small>
+
+                        @enderror
+
+                    </div>
+
+                    <div class="col-md-6 mb-4">
+
+                        <label class="form-label">
+
+                            Available Until
+                            <span>*</span>
+
+                        </label>
+
+
+                        <div class="input-group">
+
+                            <input
+                                type="time"
+                                name="available_until"
+                                id="available_until"
+                                class="form-control"
+                                value="{{ old(
+                                    'available_until',
+                                    $product->available_until ?? 0.5
+                                ) }}"
+                                min="0.01"
+                                step="0.01"
+                                placeholder="Example: 0.5"
+                                required>
+
+                        </div>
+
+
+                        @error('available_until')
+
+                            <small class="text-danger">
+                                {{ $message }}
+                            </small>
+
+                        @enderror
+
+                    </div>
+
                 </div>
 
             </div>

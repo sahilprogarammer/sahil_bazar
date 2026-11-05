@@ -2,25 +2,33 @@
 <html lang="en">
 
 <head>
-
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
-
-    <title>Location Search</title>
+    <title>Google Places - Location Search</title>
 
     <style>
+        * {
+            box-sizing: border-box;
+        }
 
         body {
             font-family: Arial, sans-serif;
             padding: 30px;
+            background: #f7f8fa;
+        }
+
+        .container {
+            max-width: 650px;
+            margin: auto;
+            background: #fff;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
         }
 
         .form-group {
-            margin-bottom: 20px;
+            margin-bottom: 25px;
         }
 
         label {
@@ -29,407 +37,433 @@
             font-weight: 600;
         }
 
-        input {
-            width: 400px;
-            max-width: 100%;
-            padding: 12px;
-            font-size: 16px;
-            border: 1px solid #ccc;
-            border-radius: 6px;
+        .autocomplete-container {
+            width: 100%;
+        }
+
+        gmp-place-autocomplete {
+            width: 100%;
         }
 
         .location-result {
-            margin-top: 10px;
-            font-size: 14px;
+            margin-top: 12px;
+            padding: 12px;
+            background: #f1f8f3;
+            border-radius: 8px;
+            font-size: 13px;
+            line-height: 1.8;
+            display: none;
+            overflow-wrap: anywhere;
         }
 
-    </style>
+        .location-result strong {
+            font-size: 15px;
+        }
 
+        button {
+            padding: 12px 25px;
+            background: #176b3a;
+            color: white;
+            border: none;
+            border-radius: 7px;
+            cursor: pointer;
+            font-size: 15px;
+        }
+
+        button:hover {
+            background: #10542c;
+        }
+
+        .output {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f4f4f4;
+            border-radius: 8px;
+            display: none;
+        }
+
+        pre {
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+    </style>
 </head>
 
 <body>
 
-    <h2>Search Location</h2>
+    <div class="container">
 
-    <form id="locationForm">
+        <h2>Search Location</h2>
 
-        <!-- FROM -->
+        <form id="locationForm">
 
-        <div class="form-group">
+            <!-- FROM LOCATION -->
 
-            <label>
-                From
-            </label>
+            <div class="form-group">
 
-            <input
-                type="text"
-                id="from"
-                placeholder="Enter from location"
-                autocomplete="off"
-            >
+                <label>From Location</label>
 
-            <input
-                type="hidden"
-                id="from_lat"
-                name="from_lat"
-            >
+                <div
+                    id="fromAutocomplete"
+                    class="autocomplete-container">
+                </div>
 
-            <input
-                type="hidden"
-                id="from_lng"
-                name="from_lng"
-            >
+                <input type="hidden" id="from" name="from">
+                <input type="hidden" id="from_lat" name="from_lat">
+                <input type="hidden" id="from_lng" name="from_lng">
+                <input type="hidden" id="from_place_id" name="from_place_id">
 
-            <input
-                type="hidden"
-                id="from_place_id"
-                name="from_place_id"
-            >
+                <div class="location-result" id="fromResult"></div>
 
-            <div
-                class="location-result"
-                id="fromResult"
-            ></div>
-
-        </div>
+            </div>
 
 
-        <!-- TO -->
+            <!-- TO LOCATION -->
 
-        <div class="form-group">
+            <div class="form-group">
 
-            <label>
-                To
-            </label>
+                <label>To Location</label>
 
-            <input
-                type="text"
-                id="to"
-                placeholder="Enter to location"
-                autocomplete="off"
-            >
+                <div
+                    id="toAutocomplete"
+                    class="autocomplete-container">
+                </div>
 
-            <input
-                type="hidden"
-                id="to_lat"
-                name="to_lat"
-            >
+                <input type="hidden" id="to" name="to">
+                <input type="hidden" id="to_lat" name="to_lat">
+                <input type="hidden" id="to_lng" name="to_lng">
+                <input type="hidden" id="to_place_id" name="to_place_id">
 
-            <input
-                type="hidden"
-                id="to_lng"
-                name="to_lng"
-            >
+                <div class="location-result" id="toResult"></div>
 
-            <input
-                type="hidden"
-                id="to_place_id"
-                name="to_place_id"
-            >
+            </div>
 
-            <div
-                class="location-result"
-                id="toResult"
-            ></div>
+
+            <button type="submit">
+                Search Locations
+            </button>
+
+        </form>
+
+
+        <!-- FINAL OUTPUT -->
+
+        <div class="output" id="finalOutput">
+
+            <h3>Selected Location Details</h3>
+
+            <pre id="finalData"></pre>
 
         </div>
 
-
-        <button type="submit">
-            Search
-        </button>
-
-    </form>
-
-
-    <!--
-        Google Maps JavaScript API
-        Replace YOUR_API_KEY with your API key
-    -->
-
-    <script
-        async
-        src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAu_srJXFDBsmYv4E09OWCrVbj5q5qgBgI&libraries=places&loading=async&v=weekly"
-    ></script>
+    </div>
 
 
     <script>
-
-        let fromAutocomplete;
-        let toAutocomplete;
-
-
         async function initLocationSearch() {
 
-            /*
-             * Load Places library
-             */
+            try {
 
-            const places =
-                await google.maps.importLibrary("places");
+                // Load Places API
 
-
-            console.log("Places library:", places);
+                const {
+                    PlaceAutocompleteElement
+                } = await google.maps.importLibrary("places");
 
 
-            /*
-             * Create FROM autocomplete
-             */
+                console.log("New Places API Loaded");
 
-            fromAutocomplete =
-                new places.Autocomplete(
-                    document.getElementById("from"),
-                    {
-                        fields: [
-                            "place_id",
-                            "geometry",
-                            "formatted_address",
-                            "name"
-                        ]
-                    }
+
+                // Create autocomplete element
+
+                function createAutocomplete(containerId, placeholder, prefix) {
+
+                    const autocomplete = new PlaceAutocompleteElement({
+
+                        includedRegionCodes: ["in"],
+
+                        locationRestriction: {
+                            north: 20.40,
+                            south: 20.18,
+                            east: 85.95,
+                            west: 85.75
+                        }
+
+                    });
+
+                    autocomplete.placeholder = placeholder;
+
+
+                    document.getElementById(containerId)
+                        .appendChild(autocomplete);
+
+
+                    // Clear old selection when user changes the input
+
+                    autocomplete.addEventListener("input", function() {
+
+                        clearSelection(prefix);
+
+                    });
+
+
+                    // Handle selected place
+
+                    autocomplete.addEventListener("gmp-select", async function(event) {
+
+                        await handlePlaceSelect(event, prefix);
+
+                    });
+
+
+                    return autocomplete;
+
+                }
+
+
+                // Create FROM and TO fields
+
+                const fromAutocomplete = createAutocomplete(
+                    "fromAutocomplete",
+                    "Enter from location",
+                    "from"
                 );
 
 
-            /*
-             * FROM selected
-             */
-
-            fromAutocomplete.addListener(
-                "place_changed",
-                function () {
-
-                    const place =
-                        fromAutocomplete.getPlace();
-
-
-                    if (
-                        !place.geometry ||
-                        !place.geometry.location
-                    ) {
-
-                        alert(
-                            "Please select a location from the suggestions."
-                        );
-
-                        return;
-
-                    }
-
-
-                    const lat =
-                        place.geometry.location.lat();
-
-                    const lng =
-                        place.geometry.location.lng();
-
-
-                    document.getElementById(
-                        "from_lat"
-                    ).value = lat;
-
-
-                    document.getElementById(
-                        "from_lng"
-                    ).value = lng;
-
-
-                    document.getElementById(
-                        "from_place_id"
-                    ).value =
-                        place.place_id || "";
-
-
-                    document.getElementById(
-                        "fromResult"
-                    ).innerHTML = `
-
-                        <strong>
-                            ${place.name || ""}
-                        </strong>
-
-                        <br>
-
-                        ${place.formatted_address || ""}
-
-                        <br>
-
-                        Latitude:
-                        ${lat}
-
-                        <br>
-
-                        Longitude:
-                        ${lng}
-
-                    `;
-
-                }
-            );
-
-
-            /*
-             * Create TO autocomplete
-             */
-
-            toAutocomplete =
-                new places.Autocomplete(
-                    document.getElementById("to"),
-                    {
-                        fields: [
-                            "place_id",
-                            "geometry",
-                            "formatted_address",
-                            "name"
-                        ]
-                    }
+                const toAutocomplete = createAutocomplete(
+                    "toAutocomplete",
+                    "Enter destination location",
+                    "to"
                 );
 
 
-            /*
-             * TO selected
-             */
+                // Clear selected values
 
-            toAutocomplete.addListener(
-                "place_changed",
-                function () {
+                function clearSelection(prefix) {
 
-                    const place =
-                        toAutocomplete.getPlace();
+                    document.getElementById(prefix).value = "";
+
+                    document.getElementById(prefix + "_lat").value = "";
+
+                    document.getElementById(prefix + "_lng").value = "";
+
+                    document.getElementById(prefix + "_place_id").value = "";
+
+                    const result = document.getElementById(prefix + "Result");
+
+                    result.textContent = "";
+
+                    result.style.display = "none";
+
+                }
 
 
-                    if (
-                        !place.geometry ||
-                        !place.geometry.location
-                    ) {
+                // Handle location selection
 
-                        alert(
-                            "Please select a location from the suggestions."
-                        );
+                async function handlePlaceSelect(event, prefix) {
 
-                        return;
+                    try {
+
+                        const place = event.placePrediction.toPlace();
+
+
+                        // Fetch required fields
+
+                        await place.fetchFields({
+
+                            fields: [
+                                "id",
+                                "displayName",
+                                "formattedAddress",
+                                "location"
+                            ]
+
+                        });
+
+
+                        if (!place.location) {
+
+                            alert("Location coordinates not available.");
+
+                            clearSelection(prefix);
+
+                            return;
+
+                        }
+
+
+                        const latitude = place.location.lat();
+
+                        const longitude = place.location.lng();
+
+                        const placeId = place.id || "";
+
+                        const name = place.displayName || "";
+
+                        const address = place.formattedAddress || "";
+
+
+                        // Save hidden input values
+
+                        document.getElementById(prefix).value = address;
+
+                        document.getElementById(prefix + "_lat").value = latitude;
+
+                        document.getElementById(prefix + "_lng").value = longitude;
+
+                        document.getElementById(prefix + "_place_id").value = placeId;
+
+
+                        // Display selected location
+
+                        const result = document.getElementById(prefix + "Result");
+
+                        result.textContent = "";
+
+
+                        const title = document.createElement("strong");
+
+                        title.textContent = name;
+
+
+                        const details = document.createElement("div");
+
+                        details.textContent =
+                            address +
+                            " | Latitude: " + latitude +
+                            " | Longitude: " + longitude;
+
+
+                        const id = document.createElement("div");
+
+                        id.textContent = "Place ID: " + placeId;
+
+
+                        result.appendChild(title);
+
+                        result.appendChild(details);
+
+                        result.appendChild(id);
+
+                        result.style.display = "block";
+
+
+                        // Console output
+
+                        console.log(prefix + " Location:", {
+
+                            name: name,
+
+                            address: address,
+
+                            latitude: latitude,
+
+                            longitude: longitude,
+
+                            place_id: placeId
+
+                        });
+
+
+                    } catch (error) {
+
+                        console.error("Place selection error:", error);
+
+                        clearSelection(prefix);
+
+                        alert("Unable to fetch location details.");
 
                     }
 
-
-                    const lat =
-                        place.geometry.location.lat();
-
-                    const lng =
-                        place.geometry.location.lng();
-
-
-                    document.getElementById(
-                        "to_lat"
-                    ).value = lat;
-
-
-                    document.getElementById(
-                        "to_lng"
-                    ).value = lng;
-
-
-                    document.getElementById(
-                        "to_place_id"
-                    ).value =
-                        place.place_id || "";
-
-
-                    document.getElementById(
-                        "toResult"
-                    ).innerHTML = `
-
-                        <strong>
-                            ${place.name || ""}
-                        </strong>
-
-                        <br>
-
-                        ${place.formatted_address || ""}
-
-                        <br>
-
-                        Latitude:
-                        ${lat}
-
-                        <br>
-
-                        Longitude:
-                        ${lng}
-
-                    `;
-
                 }
-            );
+
+
+            } catch (error) {
+
+                console.error("Google Places initialization error:", error);
+
+                alert("Google Places API failed to load. Check API key and permissions.");
+
+            }
 
         }
 
 
-        /*
-         * Wait until Google Maps has loaded
-         */
+        // Form submit
 
-        window.addEventListener(
-            "load",
-            function () {
+        document.getElementById("locationForm")
+            .addEventListener("submit", function(e) {
 
-                initLocationSearch();
-
-            }
-        );
+                e.preventDefault();
 
 
-        /*
-         * Form submit
-         */
+                const fromLat = document.getElementById("from_lat").value;
 
-        document
-            .getElementById("locationForm")
-            .addEventListener(
-                "submit",
-                function (e) {
-
-                    e.preventDefault();
+                const toLat = document.getElementById("to_lat").value;
 
 
-                    console.log({
+                // Validate selection
 
-                        from:
-                            document.getElementById(
-                                "from"
-                            ).value,
+                if (!fromLat || !toLat) {
 
-                        from_lat:
-                            document.getElementById(
-                                "from_lat"
-                            ).value,
+                    alert("Please select both locations from Google suggestions.");
 
-                        from_lng:
-                            document.getElementById(
-                                "from_lng"
-                            ).value,
-
-                        to:
-                            document.getElementById(
-                                "to"
-                            ).value,
-
-                        to_lat:
-                            document.getElementById(
-                                "to_lat"
-                            ).value,
-
-                        to_lng:
-                            document.getElementById(
-                                "to_lng"
-                            ).value
-
-                    });
+                    return;
 
                 }
-            );
 
+
+                // Final location data
+
+                const data = {
+
+                    from: document.getElementById("from").value,
+
+                    from_lat: fromLat,
+
+                    from_lng: document.getElementById("from_lng").value,
+
+                    from_place_id: document.getElementById("from_place_id").value,
+
+                    to: document.getElementById("to").value,
+
+                    to_lat: toLat,
+
+                    to_lng: document.getElementById("to_lng").value,
+
+                    to_place_id: document.getElementById("to_place_id").value
+
+                };
+
+
+                console.log("Final Location Data:", data);
+
+
+                // Display final data
+
+                document.getElementById("finalData").textContent =
+                    JSON.stringify(data, null, 4);
+
+                document.getElementById("finalOutput").style.display = "block";
+
+
+            });
+
+
+        // Expose callback
+
+        window.initLocationSearch = initLocationSearch;
+    </script>
+
+
+    <!-- Google Maps JavaScript API -->
+
+    <script
+        async
+        src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCawZlJCcDM27uHGBeoNcXcPxMfJVP1bIE&loading=async&callback=initLocationSearch&v=weekly">
     </script>
 
 </body>
 
 </html>
+x

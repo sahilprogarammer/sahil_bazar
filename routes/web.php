@@ -156,6 +156,11 @@ Route::get('/order-success', function () {
 Route::get('/explore', [HomeController::class, 'explore'])->name('explore');
 Route::get('/address', [AddressController::class, 'address'])->name('address');
 Route::post('/address-submit', [AddressController::class, 'addressStore'])->name('address-store');
+
+//update address
+Route::post('/addresses/{address}', [AddressController::class, 'addressUpdate'])
+    ->name('address-update');
+
 Route::post('/address/set-default', [AddressController::class, 'setDefault'])->name('address.setDefault');
 
 Route::get('/my-addresses', [AddressController::class, 'getAddresses'])->name('addresses.list');

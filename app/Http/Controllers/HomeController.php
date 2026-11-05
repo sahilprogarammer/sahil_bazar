@@ -19,6 +19,32 @@ use Illuminate\Support\Str;
 
 class HomeController extends Controller
 {
+    // public function home()
+    // {
+    //     $categories = Category::where('status', 'active')
+    //         ->with([
+    //             'subcategories' => function ($query) {
+    //                 $query->where('status', 'active');
+    //             }
+    //         ])
+    //         ->get();
+
+    //     // return $categories;
+    //     $popularProducts = Product::where('status', 'active')->where('is_popular', 1)->get();
+
+    //     // return $popularProducts;
+
+    //     $defaultAddress = null;
+
+    //     if (Auth::check()) {
+    //         $defaultAddress = Address::where('user_id', Auth::id())
+    //             ->where('is_default', 1)
+    //             ->first();
+    //     }
+
+    //     return view('frontend.pages.home', compact('categories', 'popularProducts', 'defaultAddress'));
+    // }
+
     public function home()
     {
         $categories = Category::where('status', 'active')
@@ -29,10 +55,84 @@ class HomeController extends Controller
             ])
             ->get();
 
-        // return $categories;
-        $popularProducts = Product::where('status', 'active')->where('is_popular', 1)->get();
+        /*
+    |--------------------------------------------------------------------------
+    | Current Date And Time
+    |--------------------------------------------------------------------------
+    */
 
-        // return $popularProducts;
+        $now = now();
+        $today = $now->toDateString();
+        $currentTime = $now->format('H:i:s');
+
+        /*
+    |--------------------------------------------------------------------------
+    | Today's Out Of Stock Products
+    |--------------------------------------------------------------------------
+    */
+
+        $outOfStockQuery = DB::table('product_availabilities as pa')
+            ->select('pa.id')
+            ->whereColumn('pa.product_id', 'products.id')
+            ->whereColumn('pa.subcategory_id', 'products.subcategory_id')
+            ->whereDate('pa.date', $today)
+            ->where('pa.availability_status', 'out_of_stock')
+            ->limit(1);
+
+        /*
+    |--------------------------------------------------------------------------
+    | Popular Products With Availability
+    |--------------------------------------------------------------------------
+    */
+
+        $popularProducts = Product::query()
+            ->where('products.status', 'active')
+            ->where('products.is_popular', 1)
+
+            ->select('products.*')
+
+            ->selectRaw('? AS product_current_time', [
+                $currentTime,
+            ])
+
+            ->selectRaw("
+            CASE
+                WHEN EXISTS (
+                    {$outOfStockQuery->toSql()}
+                )
+                THEN 'out_of_stock'
+                ELSE 'available'
+            END AS today_availability_status
+        ", $outOfStockQuery->getBindings())
+
+            ->selectRaw("
+            CASE
+                WHEN EXISTS (
+                    {$outOfStockQuery->toSql()}
+                )
+                THEN 0
+
+                WHEN products.available_from IS NOT NULL
+                    AND products.available_until IS NOT NULL
+                THEN (
+                    CAST(? AS TIME) >= products.available_from
+                    AND CAST(? AS TIME) < products.available_until
+                )
+
+                ELSE 1
+            END AS is_available_now
+        ", array_merge(
+                $outOfStockQuery->getBindings(),
+                [$currentTime, $currentTime]
+            ))
+
+            ->get();
+
+        /*
+    |--------------------------------------------------------------------------
+    | Default Address
+    |--------------------------------------------------------------------------
+    */
 
         $defaultAddress = null;
 
@@ -42,9 +142,14 @@ class HomeController extends Controller
                 ->first();
         }
 
-        // return $defaultAddress;
-
-        return view('frontend.pages.home', compact('categories', 'popularProducts', 'defaultAddress'));
+        return view(
+            'frontend.pages.home',
+            compact(
+                'categories',
+                'popularProducts',
+                'defaultAddress'
+            )
+        );
     }
 
     public function category(Category $category)
@@ -58,6 +163,30 @@ class HomeController extends Controller
         return view('frontend.pages.categories', compact('category'));
     }
 
+    // public function subcategory(Category $category, Subcategory $subcategory)
+    // {
+    //     if (
+    //         $category->status !== 'active' ||
+    //         $subcategory->status !== 'active' ||
+    //         $subcategory->category_id != $category->id
+    //     ) {
+    //         abort(404);
+    //     }
+
+    //     $products = $subcategory->products()
+    //         ->where('status', 'active')
+    //         ->paginate(12);
+
+    //     // return $products;
+
+    //     // return [$category,$subcategory,$products];
+
+    //     return view(
+    //         'frontend.pages.products',
+    //         compact('category', 'subcategory', 'products')
+    //     );
+    // }
+
     public function subcategory(Category $category, Subcategory $subcategory)
     {
         if (
@@ -68,14 +197,46 @@ class HomeController extends Controller
             abort(404);
         }
 
+        $now = now();
+        $today = $now->toDateString();
+        $currentTime = $now->format('H:i:s');
+
+        $availabilityQuery = DB::table('product_availabilities as pa')
+            ->select('pa.id')
+            ->whereColumn('pa.product_id', 'products.id')
+            ->where('pa.subcategory_id', $subcategory->id)
+            ->whereDate('pa.date', $today)
+            ->where('pa.availability_status', 'out_of_stock')
+            ->limit(1);
+
         $products = $subcategory->products()
-            ->where('status', 'active')
+            ->where('products.status', 'active')
+            ->select('products.*')
+            ->selectRaw('? AS product_current_time', [$currentTime])
+            ->selectRaw(
+                "CASE WHEN EXISTS (
+                {$availabilityQuery->toSql()}
+            ) THEN 'out_of_stock' ELSE 'available' END AS today_availability_status",
+                $availabilityQuery->getBindings()
+            )
+            ->selectRaw("
+            CASE
+                WHEN EXISTS (
+                    {$availabilityQuery->toSql()}
+                ) THEN 0
+                WHEN products.available_from IS NOT NULL
+                    AND products.available_until IS NOT NULL
+                THEN (
+                    CAST(? AS TIME) >= products.available_from
+                    AND CAST(? AS TIME) < products.available_until
+                )
+                ELSE 1
+            END AS is_available_now
+        ", array_merge(
+                $availabilityQuery->getBindings(),
+                [$currentTime, $currentTime]
+            ))
             ->paginate(12);
-
-        // return $products;
-
-        // return [$category,$subcategory,$products];
-
         return view(
             'frontend.pages.products',
             compact('category', 'subcategory', 'products')
@@ -493,6 +654,108 @@ class HomeController extends Controller
         return view('frontend.pages.checkout');
     }
 
+    // public function refresh(Request $request)
+    // {
+    //     $validated = $request->validate([
+    //         'cart' => ['required', 'array'],
+    //         'cart.*.product_id' => ['required', 'integer'],
+    //         'cart.*.quantity' => ['required', 'numeric', 'min:0.01'],
+    //     ]);
+
+    //     $cart = $validated['cart'];
+
+    //     $productIds = collect($cart)
+    //         ->pluck('product_id')
+    //         ->unique()
+    //         ->values();
+
+    //     $products = DB::table('products')
+    //         ->whereIn('id', $productIds)
+    //         ->get()
+    //         ->keyBy('id');
+
+    //     $items = [];
+
+    //     foreach ($cart as $cartItem) {
+    //         $product = $products->get($cartItem['product_id']);
+
+    //         // Ignore products that no longer exist.
+    //         if (!$product) {
+    //             continue;
+    //         }
+
+    //         $quantity = (float) $cartItem['quantity'];
+    //         $unit = strtolower($product->unit ?? 'gram');
+
+    //         $price = (float) $product->price;
+    //         $discountPrice = (float) ($product->discount_price ?? 0);
+
+    //         // Always use the latest database price.
+    //         $sellingPrice = $discountPrice > 0
+    //             ? $discountPrice
+    //             : $price;
+
+    //         $minimumQty = (float) ($product->minimum_order_qty ?? 0);
+
+    //         // Calculate total using the latest database price.
+    //         switch ($unit) {
+    //             case 'gram':
+    //                 $totalPrice = ($quantity / 1000) * $sellingPrice;
+    //                 break;
+
+    //             case 'piece':
+    //                 $totalPrice = $minimumQty > 0
+    //                     ? ($quantity * $sellingPrice / $minimumQty)
+    //                     : 0;
+    //                 break;
+
+    //             case 'kg':
+    //             case 'packet':
+    //             case 'liter':
+    //             default:
+    //                 $totalPrice = $quantity * $sellingPrice;
+    //                 break;
+    //         }
+
+    //         // Handle product images stored as JSON or a string.
+    //         $images = $product->images ?? null;
+
+    //         if (is_string($images)) {
+    //             $decodedImages = json_decode($images, true);
+
+    //             if (json_last_error() === JSON_ERROR_NONE) {
+    //                 $images = $decodedImages;
+    //             } else {
+    //                 $images = [$images];
+    //             }
+    //         }
+
+    //         $image = is_array($images)
+    //             ? ($images[0] ?? '')
+    //             : '';
+
+    //         $items[] = [
+    //             'product_id' => (string) $product->id,
+    //             'name' => $product->name,
+    //             'quantity' => $quantity,
+    //             'unit' => $unit,
+    //             'price' => $price,
+    //             'discount_price' => $discountPrice,
+    //             'selling_price' => $sellingPrice,
+    //             'minimum_order_qty' => $minimumQty,
+    //             'total_price' => round($totalPrice, 2),
+    //             'image' => $image
+    //                 ? asset(ltrim($image, '/'))
+    //                 : '',
+    //         ];
+    //     }
+
+    //     return response()->json([
+    //         'success' => true,
+    //         'items' => $items,
+    //     ]);
+    // }
+
     public function refresh(Request $request)
     {
         $validated = $request->validate([
@@ -508,12 +771,76 @@ class HomeController extends Controller
             ->unique()
             ->values();
 
+        $now = now();
+        $today = $now->toDateString();
+        $currentTime = $now->format('H:i:s');
+
+        /*
+    |--------------------------------------------------------------------------
+    | Get Latest Products And Their Availability
+    |--------------------------------------------------------------------------
+    */
+
+        $outOfStockQuery = DB::table('product_availabilities as pa')
+            ->select('pa.id')
+            ->whereColumn('pa.product_id', 'products.id')
+            ->whereColumn('pa.subcategory_id', 'products.subcategory_id')
+            ->whereDate('pa.date', $today)
+            ->where('pa.availability_status', 'out_of_stock')
+            ->limit(1);
+
         $products = DB::table('products')
-            ->whereIn('id', $productIds)
+            ->whereIn('products.id', $productIds)
+            ->select('products.*')
+
+            // Current time
+            ->selectRaw('? AS product_current_time', [
+                $currentTime,
+            ])
+
+            // Today's availability status
+            ->selectRaw("
+            CASE
+                WHEN EXISTS (
+                    {$outOfStockQuery->toSql()}
+                )
+                THEN 'out_of_stock'
+                ELSE 'available'
+            END AS today_availability_status
+        ", $outOfStockQuery->getBindings())
+
+            // Available now according to the product's time range
+            ->selectRaw("
+            CASE
+                WHEN EXISTS (
+                    {$outOfStockQuery->toSql()}
+                )
+                THEN 0
+
+                WHEN products.available_from IS NOT NULL
+                    AND products.available_until IS NOT NULL
+                THEN (
+                    CAST(? AS TIME) >= products.available_from
+                    AND CAST(? AS TIME) < products.available_until
+                )
+
+                ELSE 1
+            END AS is_available_now
+        ", array_merge(
+                $outOfStockQuery->getBindings(),
+                [$currentTime, $currentTime]
+            ))
+
             ->get()
             ->keyBy('id');
 
         $items = [];
+
+        /*
+    |--------------------------------------------------------------------------
+    | Prepare Cart Items
+    |--------------------------------------------------------------------------
+    */
 
         foreach ($cart as $cartItem) {
             $product = $products->get($cartItem['product_id']);
@@ -536,7 +863,12 @@ class HomeController extends Controller
 
             $minimumQty = (float) ($product->minimum_order_qty ?? 0);
 
-            // Calculate total using the latest database price.
+            /*
+        |--------------------------------------------------------------------------
+        | Calculate Product Total
+        |--------------------------------------------------------------------------
+        */
+
             switch ($unit) {
                 case 'gram':
                     $totalPrice = ($quantity / 1000) * $sellingPrice;
@@ -556,7 +888,12 @@ class HomeController extends Controller
                     break;
             }
 
-            // Handle product images stored as JSON or a string.
+            /*
+        |--------------------------------------------------------------------------
+        | Handle Product Images
+        |--------------------------------------------------------------------------
+        */
+
             $images = $product->images ?? null;
 
             if (is_string($images)) {
@@ -573,21 +910,94 @@ class HomeController extends Controller
                 ? ($images[0] ?? '')
                 : '';
 
+            /*
+        |--------------------------------------------------------------------------
+        | Prepare Image URL
+        |--------------------------------------------------------------------------
+        */
+
+            $imageUrl = '';
+
+            if (!empty($image)) {
+                $image = trim($image);
+
+                // Handle full image URLs.
+                if (filter_var($image, FILTER_VALIDATE_URL)) {
+                    $imageUrl = $image;
+                } else {
+                    // Remove leading slash.
+                    $image = ltrim($image, '/');
+
+                    // Remove duplicate public/ prefix.
+                    if (str_starts_with($image, 'public/')) {
+                        $image = substr($image, strlen('public/'));
+                    }
+
+                    // Remove duplicate products/ prefix handling is unnecessary;
+                    // preserve the folder stored in the database.
+                    $imageUrl = 'https://nonvegmart.in/public/' . $image;
+                }
+            }
+
+            /*
+        |--------------------------------------------------------------------------
+        | Availability Values
+        |--------------------------------------------------------------------------
+        */
+
+            $todayAvailabilityStatus =
+                $product->today_availability_status;
+
+            $isAvailableNow = (bool) $product->is_available_now;
+
+            $isOutOfStock = $todayAvailabilityStatus === 'out_of_stock';
+
+            $isAvailable = !$isOutOfStock && $isAvailableNow;
+
+            /*
+        |--------------------------------------------------------------------------
+        | Return Cart Item
+        |--------------------------------------------------------------------------
+        */
+
             $items[] = [
                 'product_id' => (string) $product->id,
                 'name' => $product->name,
+
                 'quantity' => $quantity,
                 'unit' => $unit,
+
                 'price' => $price,
                 'discount_price' => $discountPrice,
                 'selling_price' => $sellingPrice,
                 'minimum_order_qty' => $minimumQty,
+
                 'total_price' => round($totalPrice, 2),
-                'image' => $image
-                    ? asset(ltrim($image, '/'))
-                    : '',
+
+                'image' => $imageUrl,
+
+                // Availability fields
+                'available_from' => $product->available_from,
+                'available_until' => $product->available_until,
+                'product_current_time' => $product->product_current_time,
+
+                'today_availability_status' => $todayAvailabilityStatus,
+                'is_available_now' => $isAvailableNow ? 1 : 0,
+                'is_available' => $isAvailable ? 1 : 0,
+
+                'availability_message' => $isOutOfStock
+                    ? 'Out of stock today'
+                    : (!$isAvailableNow
+                        ? 'Currently unavailable'
+                        : 'Available'),
             ];
         }
+
+        /*
+    |--------------------------------------------------------------------------
+    | Return JSON Response
+    |--------------------------------------------------------------------------
+    */
 
         return response()->json([
             'success' => true,
